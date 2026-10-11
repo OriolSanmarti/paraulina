@@ -561,23 +561,45 @@ async function connectaFirebase() {
   ]);
   const app = initializeApp(FIREBASE_CONFIG);
   const auth = fa.getAuth(app);
-  // Compte anònim: el navegador recorda el jugador sense haver de registrar-se
+  // Es comença amb un compte anònim (el navegador recorda el jugador sense registrar-se);
+  // més tard es pot connectar amb Google per no perdre el progrés i jugar des d'altres dispositius.
   let usuari = await new Promise(r => { const atura = fa.onAuthStateChanged(auth, u => { atura(); r(u); }); });
   if (!usuari) usuari = (await fa.signInAnonymously(auth)).user;
   const db = fs.getFirestore(app);
-  const id = usuari.uid;
-  return {
-    id, necessitaNom: true,
-    llegeixMeu: async () => { const s = await fs.getDoc(fs.doc(db, "jugadors", id)); return s.exists() ? s.data() : null; },
-    desa: dades => fs.setDoc(fs.doc(db, "jugadors", id), dades),
+  const docMeu = () => fs.doc(db, "jugadors", con.id);
+  const con = {
+    id: usuari.uid, necessitaNom: true, potGoogle: true,
+    google: () => auth.currentUser?.providerData.find(p => p.providerId === "google.com") || null,
+    llegeixMeu: async () => { const s = await fs.getDoc(docMeu()); return s.exists() ? s.data() : null; },
+    desa: dades => fs.setDoc(docMeu(), dades),
     escolta: cb => fs.onSnapshot(
       fs.query(fs.collection(db, "jugadors"), fs.orderBy("nivell", "desc"), fs.limit(200)),
       s => cb(s.docs.map(d => ({ id: d.id, ...d.data() }))), () => {}),
     perfils: async ids => Object.fromEntries(ids.map(i => {
-      const nom = amics.llista.find(j => j.id === i)?.nom || (i === id ? nomJugador() : "") || "Jugador";
-      return [i, { name: nom, avatarUrl: avatarInicial(nom, i) }];
+      const j = amics.llista.find(x => x.id === i);
+      const nom = j?.nom || (i === con.id ? nomJugador() : "") || "Jugador";
+      return [i, { name: nom, avatarUrl: j?.foto || avatarInicial(nom, i) }];
     })),
+    // Retorna true si s'ha canviat a un altre jugador (el Google ja tenia progrés en un altre dispositiu)
+    connectaGoogle: async () => {
+      const proveidor = new fa.GoogleAuthProvider();
+      try {
+        await fa.linkWithPopup(auth.currentUser, proveidor);
+        return false;
+      } catch (e) {
+        if (e.code !== "auth/credential-already-in-use") throw e;
+        // Aquest Google ja és un jugador: s'esborra el jugador anònim d'aquest navegador i s'entra amb el de Google
+        const credencial = fa.GoogleAuthProvider.credentialFromError(e);
+        await fs.deleteDoc(docMeu()).catch(() => {});
+        const anonim = auth.currentUser;
+        const nou = (await fa.signInWithCredential(auth, credencial)).user;
+        await fa.deleteUser(anonim).catch(() => {});
+        con.id = nou.uid;
+        return true;
+      }
+    },
   };
+  return con;
 }
 
 async function connectaArtifact() {
@@ -600,15 +622,7 @@ async function iniciaAmics() {
     || await connectaArtifact().catch(() => null);
   if (!con) return;
   amics.con = con;
-  // Si en aquest navegador no hi ha progrés però al núvol sí, el recupera
-  const dades = await con.llegeixMeu().catch(() => null);
-  if (dades && dades.nivell > estat.nivell && !estat.enCurs) {
-    estat.nivell = dades.nivell;
-    estat.estrelles = { ...(dades.estrelles || {}), ...estat.estrelles };
-    desaEstat();
-    if (!$("pMapa").hidden) pintaMapa();
-  }
-  if (dades?.nom && !nomJugador()) desa("paraulina-nom", dades.nom);
+  await recuperaProgres();
   $("btnAmics").hidden = false;
   $("btnCanviaNom").hidden = !con.necessitaNom;
   con.escolta(llista => {
@@ -618,6 +632,47 @@ async function iniciaAmics() {
   });
   if (con.necessitaNom && !nomJugador()) demanaNom();
   publicaProgres();
+}
+
+// Si en aquest navegador no hi ha progrés però al núvol sí (un altre dispositiu), el recupera
+async function recuperaProgres() {
+  const dades = await amics.con.llegeixMeu().catch(() => null);
+  if (dades && dades.nivell > estat.nivell && !estat.enCurs) {
+    estat.nivell = dades.nivell;
+    estat.estrelles = { ...(dades.estrelles || {}), ...estat.estrelles };
+    desaEstat();
+    if (!$("pMapa").hidden) pintaMapa();
+  }
+  if (dades?.nom && (!nomJugador() || amics.con.google())) desa("paraulina-nom", dades.nom);
+}
+
+function pintaEstatGoogle() {
+  const con = amics.con, g = con?.google?.();
+  $("zonaGoogle").hidden = !con?.potGoogle;
+  $("btnGoogle").hidden = !!g;
+  $("textGoogle").textContent = g
+    ? `Connectat amb Google${g.email ? " (" + g.email + ")" : ""}. El teu progrés es guarda al compte.`
+    : "Connecta't amb Google per no perdre el progrés i jugar des de qualsevol dispositiu.";
+}
+
+async function connectaGoogle() {
+  const con = amics.con;
+  try {
+    const canviat = await con.connectaGoogle();
+    const g = con.google();
+    if (canviat) { amics.publicat = null; await recuperaProgres(); }
+    if (!nomJugador() && g?.displayName) desa("paraulina-nom", g.displayName.split(" ")[0].slice(0, 20));
+    amics.publicat = null;
+    await publicaProgres();
+    pintaEstatGoogle(); pintaLlistaAmics(); pintaAmicsAlMapa();
+    avisa(canviat ? "Has recuperat el teu progrés de Google 🎉" : "Connectat amb Google ✅");
+  } catch (e) {
+    console.warn("Error connectant amb Google:", e);
+    if (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request") return;
+    avisa(["auth/popup-blocked", "auth/operation-not-supported-in-this-environment", "auth/web-storage-unsupported"].includes(e.code)
+      ? "Obre el joc a Chrome o Safari per connectar amb Google"
+      : "No s'ha pogut connectar amb Google. Torna-ho a provar.");
+  }
 }
 
 function demanaNom() {
@@ -640,7 +695,9 @@ async function publicaProgres() {
   if (!con || (con.necessitaNom && !nomJugador())) return;
   const dades = { nivell: estat.nivell, estrelles: estat.estrelles, total: totalEstrelles(), actualitzat: Date.now() };
   if (con.necessitaNom) dades.nom = nomJugador();
-  const clau = [dades.nivell, dades.total, dades.nom].join("|");
+  const foto = con.google?.()?.photoURL;
+  if (foto) dades.foto = foto.slice(0, 500);
+  const clau = [con.id, dades.nivell, dades.total, dades.nom, dades.foto].join("|");
   if (amics.publicat === clau) return;
   amics.publicat = clau;
   try { await con.desa(dades); } catch (e) { console.warn("No s'ha pogut desar el progrés:", e); amics.publicat = null; }
@@ -690,8 +747,9 @@ document.addEventListener("keydown", e => {
 document.querySelectorAll(".tornar").forEach(b => b.addEventListener("click", () => mostraMapa()));
 $("btnAjuda").addEventListener("click", () => $("dlgAjuda").showModal());
 $("btnStats").addEventListener("click", obreStats);
-$("btnAmics").addEventListener("click", () => { pintaLlistaAmics(); $("dlgAmics").showModal(); });
+$("btnAmics").addEventListener("click", () => { pintaLlistaAmics(); pintaEstatGoogle(); $("dlgAmics").showModal(); });
 $("btnCanviaNom").addEventListener("click", () => { $("dlgAmics").close(); demanaNom(); });
+$("btnGoogle").addEventListener("click", connectaGoogle);
 $("btnReinicia").addEventListener("click", () => { $("dlgStats").close(); $("dlgReinicia").showModal(); });
 $("btnReiniciaSi").addEventListener("click", () => {
   estat = { ...ESTAT_INICIAL, estrelles: {}, usades: [], dist: [0, 0, 0, 0, 0, 0] };
