@@ -578,7 +578,9 @@ async function connectaFirebase() {
     perfils: async ids => Object.fromEntries(ids.map(i => {
       const j = amics.llista.find(x => x.id === i);
       const nom = j?.nom || (i === con.id ? nomJugador() : "") || "Jugador";
-      return [i, { name: nom, avatarUrl: j?.foto || avatarInicial(nom, i) }];
+      // Només fotos de perfil de Google: una adreça qualsevol podria servir per espiar qui mira el mapa
+      const foto = typeof j?.foto === "string" && /^https:\/\/[a-z0-9-]+\.googleusercontent\.com\//.test(j.foto) ? j.foto : "";
+      return [i, { name: nom, avatarUrl: foto || avatarInicial(nom, i) }];
     })),
     // Retorna true si s'ha canviat a un altre jugador (el Google ja tenia progrés en un altre dispositiu)
     connectaGoogle: async () => {
@@ -696,7 +698,7 @@ async function publicaProgres() {
   const dades = { nivell: estat.nivell, estrelles: estat.estrelles, total: totalEstrelles(), actualitzat: Date.now() };
   if (con.necessitaNom) dades.nom = nomJugador();
   const foto = con.google?.()?.photoURL;
-  if (foto) dades.foto = foto.slice(0, 500);
+  if (foto && foto.length <= 500 && /^https:\/\/[a-z0-9-]+\.googleusercontent\.com\//.test(foto)) dades.foto = foto;
   const clau = [con.id, dades.nivell, dades.total, dades.nom, dades.foto].join("|");
   if (amics.publicat === clau) return;
   amics.publicat = clau;

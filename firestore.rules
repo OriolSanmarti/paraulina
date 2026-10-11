@@ -13,7 +13,7 @@ service cloud.firestore {
         && (!('foto' in request.resource.data)
             || (request.resource.data.foto is string
                 && request.resource.data.foto.size() <= 500
-                && request.resource.data.foto.matches('https://.*')))
+                && request.resource.data.foto.matches('https://[a-z0-9-]+[.]googleusercontent[.]com/.*')))
         && request.resource.data.nom is string
         && request.resource.data.nom.size() > 0
         && request.resource.data.nom.size() <= 20
