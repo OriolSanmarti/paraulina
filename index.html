@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Paraulina</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Joc de paraules amb mapa de nivells: pantalla del mapa (camí que serpenteja) + pantalles de joc a pantalla completa */
+  :root {
+    --bg: #fbf7f0; --bg-glow1: #ffe3d6; --bg-glow2: #e6f4ea;
+    --surface: #ffffff; --fg: #2a2438; --muted: #857d92;
+    --tile-border: #e4ddd2; --tile-filled: #b5aa9c; --tile-bg: #fffdf9;
+    --key: #ece5da; --key-shadow: #d3c8b8; --key-fg: #2a2438;
+    --key-no: #b9b2c2; --key-no-shadow: #9d95a8; --key-no-fg: #f4f1f7;
+    --verd: #2fae74; --verd-sh: #238a5b;
+    --groc: #f2b632; --groc-sh: #cc9318;
+    --gris: #8c8597; --gris-sh: #6e6779;
+    --accent: #ff6b5b; --accent-sh: #db4f40;
+    --lila: #8a6cf0; --lila-sh: #6a4fd0;
+    --on-color: #ffffff;
+    --shadow: 0 10px 30px rgba(60, 40, 30, .12);
+    --font-display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+    --font-text: "Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15131f; --bg-glow1: #2b1f33; --bg-glow2: #142a24;
+      --surface: #211e2e; --fg: #f3effa; --muted: #9a93ad;
+      --tile-border: #353048; --tile-filled: #6a6380; --tile-bg: #1b1927;
+      --key: #423c58; --key-shadow: #2a2539; --key-fg: #f3effa;
+      --key-no: #1f1c2b; --key-no-shadow: #14121c; --key-no-fg: #4f4963;
+      --verd: #2fae74; --verd-sh: #1f7c51;
+      --groc: #e9ad2c; --groc-sh: #b07e12;
+      --gris: #4d4760; --gris-sh: #383347;
+      --accent: #ff7a6b; --accent-sh: #cc5245;
+      --lila: #9a80f5; --lila-sh: #6f55cf;
+      --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15131f; --bg-glow1: #2b1f33; --bg-glow2: #142a24;
+    --surface: #211e2e; --fg: #f3effa; --muted: #9a93ad;
+    --tile-border: #353048; --tile-filled: #6a6380; --tile-bg: #1b1927;
+    --key: #423c58; --key-shadow: #2a2539; --key-fg: #f3effa;
+    --key-no: #1f1c2b; --key-no-shadow: #14121c; --key-no-fg: #4f4963;
+    --verd: #2fae74; --verd-sh: #1f7c51;
+    --groc: #e9ad2c; --groc-sh: #b07e12;
+    --gris: #4d4760; --gris-sh: #383347;
+    --accent: #ff7a6b; --accent-sh: #cc5245;
+    --lila: #9a80f5; --lila-sh: #6f55cf;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background:
+      radial-gradient(circle at 15% -10%, var(--bg-glow1), transparent 45%),
+      radial-gradient(circle at 110% 30%, var(--bg-glow2), transparent 40%),
+      var(--bg);
+    background-attachment: fixed;
+    color: var(--fg); font-family: var(--font-text);
+    -webkit-tap-highlight-color: transparent; overflow: hidden;
+  }
+  button { font-family: inherit; color: inherit; }
+  button:focus-visible { outline: 3px solid var(--lila); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  .pantalla { height: 100%; display: flex; flex-direction: column; align-items: center; }
+
+  /* ---------- Capçaleres ---------- */
+  .capcalera {
+    width: 100%; max-width: 520px; padding: 12px 16px 6px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0;
+  }
+  .icona {
+    width: 42px; height: 42px; border-radius: 14px; border: 0; cursor: pointer; flex-shrink: 0;
+    background: var(--surface); color: var(--fg); box-shadow: var(--shadow);
+    display: grid; place-items: center; transition: transform .15s;
+  }
+  .icona:hover { transform: translateY(-2px); }
+  .icona svg { width: 22px; height: 22px; }
+  .espai-icona { width: 42px; flex-shrink: 0; }
+  .logo { display: flex; gap: 3px; }
+  .logo span {
+    width: clamp(20px, 6vw, 30px); height: clamp(20px, 6vw, 30px);
+    display: grid; place-items: center; border-radius: 7px; color: var(--on-color);
+    font: 700 clamp(12px, 3.8vw, 18px) var(--font-display);
+    box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); animation: entra .5s backwards;
+  }
+  .logo span:nth-child(3n+1) { background: var(--verd); }
+  .logo span:nth-child(3n+2) { background: var(--groc); }
+  .logo span:nth-child(3n) { background: var(--accent); }
+  @keyframes entra { from { transform: translateY(-14px) scale(.6); opacity: 0; } }
+  .titol-joc { text-align: center; line-height: 1.15; min-width: 0; }
+  .titol-joc b { display: block; font: 700 1.3rem var(--font-display); }
+  .titol-joc small { color: var(--muted); font-weight: 800; font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; }
+
+  .xips { display: flex; gap: 8px; justify-content: center; padding: 4px 16px 10px; flex-wrap: wrap; flex-shrink: 0; }
+  .xip {
+    display: flex; align-items: center; gap: 5px; padding: 7px 12px; border-radius: 999px; border: 0;
+    background: var(--surface); box-shadow: var(--shadow); font-weight: 800; font-size: .9rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .xip.apagat { color: var(--muted); }
+  button.xip { cursor: pointer; }
+
+  /* ---------- Mapa ---------- */
+  .scroll-mapa { flex: 1; width: 100%; overflow-y: auto; overflow-x: hidden; }
+  .cami { max-width: 520px; margin: 0 auto; padding: 8px 16px 120px; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+  .seccio {
+    width: 100%; border-radius: 20px; padding: 14px 18px; color: var(--on-color); margin-top: 10px;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    box-shadow: inset 0 -5px 0 rgba(0,0,0,.15);
+  }
+  .seccio.facil { background: var(--verd); }
+  .seccio.mitja { background: var(--groc); }
+  .seccio.dificil { background: var(--accent); }
+  .seccio b { font: 700 1.15rem var(--font-display); display: block; }
+  .seccio small { font-weight: 700; opacity: .9; }
+  .seccio .num { font: 700 2rem var(--font-display); opacity: .35; }
+  .node-fila { position: relative; width: 100%; height: 86px; display: flex; justify-content: center; --dx: calc(var(--o) * min(90px, 22vw)); }
+  .node-fila.gran { height: 104px; }
+  .node {
+    position: relative; width: 72px; height: 66px; border-radius: 50%; border: 0; cursor: pointer;
+    transform: translateX(var(--dx));
+    font: 700 1.5rem var(--font-display); display: grid; place-items: center;
+    background: var(--key); color: var(--muted); box-shadow: 0 7px 0 var(--key-shadow);
+    transition: filter .15s;
+  }
+  .node:active { filter: brightness(.95); }
+  .node.fet { background: var(--verd); color: var(--on-color); box-shadow: 0 7px 0 var(--verd-sh); }
+  .node.actual { background: var(--accent); color: var(--on-color); box-shadow: 0 7px 0 var(--accent-sh); animation: respira 2s ease-in-out infinite; }
+  .node.especial { width: 88px; height: 82px; font-size: 2rem; }
+  .node.especial.fet { background: var(--lila); box-shadow: 0 7px 0 var(--lila-sh); }
+  .node.bloquejat { cursor: default; }
+  .node.nou { animation: desbloqueja .8s cubic-bezier(.3, 1.6, .5, 1), respira 2s 1s ease-in-out infinite; }
+  @keyframes respira { 50% { transform: translateX(var(--dx)) scale(1.06); } }
+  @keyframes desbloqueja { 0% { transform: translateX(var(--dx)) scale(.4); } }
+  .node .estrelles { position: absolute; bottom: -24px; left: 50%; transform: translateX(-50%); font-size: .8rem; letter-spacing: -1px; white-space: nowrap; }
+  .node .estrelles .buida { filter: grayscale(1); opacity: .35; }
+  .bombolla {
+    position: absolute; top: -40px; left: 50%; transform: translateX(-50%);
+    background: var(--surface); color: var(--accent); font: 700 .85rem var(--font-display); letter-spacing: .06em;
+    padding: 6px 12px; border-radius: 12px; box-shadow: var(--shadow); white-space: nowrap;
+    animation: flota 1.6s ease-in-out infinite;
+  }
+  .bombolla::after { content: ""; position: absolute; bottom: -6px; left: 50%; margin-left: -6px; border: 6px solid transparent; border-bottom: 0; border-top-color: var(--surface); }
+  @keyframes flota { 50% { transform: translate(-50%, -5px); } }
+  .avatars { position: absolute; top: 50%; left: 50%; display: flex; align-items: center; transform: translate(calc(var(--dx) + 46px), -50%); }
+  .node-fila.gran .avatars { transform: translate(calc(var(--dx) + 54px), -50%); }
+  .node-fila.esquerra .avatars { transform: translate(calc(var(--dx) - 100% - 46px), -50%); flex-direction: row-reverse; }
+  .avatars img { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--surface); margin-left: -10px; background: var(--surface); box-shadow: var(--shadow); }
+  .node-fila.esquerra .avatars img { margin-left: 0; margin-right: -10px; }
+  .avatars img:first-child { margin: 0; }
+  .avatars span { margin: 0 4px; font-weight: 800; font-size: .8rem; color: var(--muted); }
+
+  /* ---------- Paraulina ---------- */
+  .zona-joc { flex: 1; display: flex; align-items: center; justify-content: center; padding: 10px 16px; width: 100%; min-height: 0; }
+  #pParaulina { --t: min(15vw, 62px, calc((100dvh - 330px) / 6.6)); }
+  .graella { display: grid; gap: 7px; }
+  .fila { display: grid; grid-template-columns: repeat(5, var(--t)); gap: 7px; }
+  .tremola { animation: tremola .45s; }
+  @keyframes tremola { 15%,55% { transform: translateX(-8px); } 35%,75% { transform: translateX(8px); } }
+  .cel {
+    position: relative; width: var(--t); height: var(--t); border-radius: 12px;
+    border: 2px solid var(--tile-border); background: var(--tile-bg); color: var(--fg);
+    display: grid; place-items: center;
+    font: 600 calc(var(--t) * .52) var(--font-display); text-transform: uppercase;
+    user-select: none; transition: border-color .15s, box-shadow .15s;
+  }
+  .fila.activa .cel { cursor: pointer; }
+  .cel.plena { border-color: var(--tile-filled); animation: pop .12s; }
+  @keyframes pop { 50% { transform: scale(1.1); } }
+  .cel.cursor { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  .cel.cursor:empty::after {
+    content: ""; position: absolute; bottom: 18%; width: 38%; height: 3px; border-radius: 3px;
+    background: var(--accent); animation: parpelleja 1s steps(2) infinite;
+  }
+  @keyframes parpelleja { 50% { opacity: 0; } }
+  .cel.invalida { color: var(--accent); border-color: var(--accent); }
+  .cel.revela { animation: gira .6s ease-in-out; }
+  @keyframes gira { 50% { transform: rotateX(90deg) scale(.95); } }
+  .cel.verd, .cel.groc, .cel.gris { color: var(--on-color); border-color: transparent; }
+  .cel.verd { background: var(--verd); box-shadow: inset 0 -4px 0 var(--verd-sh); }
+  .cel.groc { background: var(--groc); box-shadow: inset 0 -4px 0 var(--groc-sh); }
+  .cel.gris { background: var(--gris); box-shadow: inset 0 -4px 0 var(--gris-sh); }
+  .cel.salta { animation: salta .7s cubic-bezier(.3, 1.6, .5, 1); }
+  @keyframes salta { 30% { transform: translateY(-26px) rotate(-4deg); } 60% { transform: translateY(4px); } }
+
+  /* ---------- Teclat ---------- */
+  .teclat { width: 100%; max-width: 520px; padding: 0 6px calc(12px + env(safe-area-inset-bottom, 0px)); user-select: none; flex-shrink: 0; }
+  .fila-t { display: flex; gap: 6px; margin-bottom: 8px; justify-content: center; }
+  .tecla {
+    flex: 1; max-width: 46px; height: 56px; padding: 0; border: 0; border-radius: 10px; cursor: pointer;
+    background: var(--key); color: var(--key-fg); box-shadow: 0 4px 0 var(--key-shadow);
+    font: 600 1.15rem var(--font-display); text-transform: uppercase;
+    transition: transform .06s, box-shadow .06s, background .3s, color .3s;
+  }
+  .tecla:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--key-shadow); }
+  .tecla.ampla { flex: 1.6; max-width: 76px; font-size: .85rem; font-weight: 700; text-transform: none; }
+  .tecla.entra { background: var(--accent); color: var(--on-color); box-shadow: 0 4px 0 var(--accent-sh); }
+  .tecla.entra:disabled { background: var(--key); color: var(--key-fg); box-shadow: 0 4px 0 var(--key-shadow); opacity: .45; cursor: not-allowed; }
+  .tecla.verd { background: var(--verd); color: var(--on-color); box-shadow: 0 4px 0 var(--verd-sh); }
+  .tecla.groc { background: var(--groc); color: var(--on-color); box-shadow: 0 4px 0 var(--groc-sh); }
+  .tecla.gris {
+    background: var(--key-no); color: var(--key-no-fg); box-shadow: 0 4px 0 var(--key-no-shadow);
+    text-decoration: line-through; text-decoration-thickness: 2px;
+  }
+  .tecla.gris:disabled, .tecla.verd:disabled { cursor: default; }
+
+  /* ---------- Penjat ---------- */
+  .penjat-zona { flex-direction: column; gap: 14px; }
+  .forca { width: min(190px, 28dvh); height: auto; }
+  .forca .estructura { stroke: var(--muted); }
+  .forca .part { stroke: var(--accent); fill: none; opacity: 0; transition: opacity .4s; }
+  .forca .part.visible { opacity: 1; }
+  .vides { display: flex; gap: 4px; font-size: 1.2rem; }
+  .vides .perduda { filter: grayscale(1); opacity: .3; }
+  .forats { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 100%; }
+  .forat {
+    width: clamp(26px, 8vw, 42px); height: clamp(38px, 11vw, 52px);
+    border-bottom: 4px solid var(--tile-filled); display: grid; place-items: center;
+    font: 600 clamp(1.3rem, 6vw, 2rem) var(--font-display); text-transform: uppercase;
+  }
+  .forat.ple { border-color: var(--verd); animation: pop .2s; }
+  .forat.perdut { color: var(--accent); border-color: var(--accent); }
+
+  /* ---------- Anagrama ---------- */
+  .anagrama-zona { flex-direction: column; gap: 22px; }
+  .anagrama-zona .pista { color: var(--muted); font-weight: 700; text-align: center; margin: 0; }
+  .ranures, .fitxes { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .ranura, .fitxa {
+    width: clamp(36px, 11vw, 54px); height: clamp(36px, 11vw, 54px); border-radius: 12px;
+    display: grid; place-items: center; font: 600 clamp(1.3rem, 6vw, 1.9rem) var(--font-display); text-transform: uppercase;
+  }
+  .ranura { border: 2px dashed var(--tile-filled); background: var(--tile-bg); cursor: pointer; }
+  .ranura.plena { border-style: solid; border-color: var(--lila); animation: pop .12s; }
+  .ranures.be .ranura { background: var(--verd); border-color: transparent; color: var(--on-color); }
+  .fitxa {
+    border: 0; cursor: pointer; background: var(--lila); color: var(--on-color);
+    box-shadow: 0 5px 0 var(--lila-sh); transition: transform .06s, opacity .2s;
+  }
+  .fitxa:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--lila-sh); }
+  .fitxa.usada { opacity: 0; pointer-events: none; transform: scale(.6); }
+  .botons-anagrama { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+  /* ---------- Botons, avisos i diàlegs ---------- */
+  .boto {
+    border: 0; border-radius: 14px; padding: 13px 20px; cursor: pointer;
+    font: 700 1rem var(--font-display); background: var(--key); color: var(--key-fg);
+    box-shadow: 0 4px 0 var(--key-shadow); transition: transform .06s, box-shadow .06s;
+  }
+  .boto:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 var(--key-shadow); }
+  .boto:disabled { opacity: .45; cursor: not-allowed; }
+  .boto.principal { background: var(--verd); color: var(--on-color); box-shadow: 0 4px 0 var(--verd-sh); }
+  .boto.principal:active:not(:disabled) { box-shadow: 0 1px 0 var(--verd-sh); }
+  .boto.perill { background: var(--accent); color: var(--on-color); box-shadow: 0 4px 0 var(--accent-sh); }
+  .enllac { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font-weight: 700; padding: 6px; }
+
+  .avis {
+    position: fixed; top: calc(76px + env(safe-area-inset-top, 0px)); left: 50%; transform: translate(-50%, -16px);
+    background: var(--fg); color: var(--bg); padding: 12px 20px; border-radius: 999px; max-width: calc(100% - 32px);
+    font-weight: 800; opacity: 0; pointer-events: none; z-index: 20; box-shadow: var(--shadow); text-align: center;
+    transition: opacity .2s, transform .25s cubic-bezier(.3, 1.6, .5, 1);
+  }
+  .avis.visible { opacity: 1; transform: translate(-50%, 0); }
+
+  dialog {
+    border: 0; border-radius: 24px; padding: 24px 22px; max-width: 390px; width: calc(100% - 32px);
+    max-height: calc(100% - 32px); overflow-y: auto;
+    background: var(--surface); color: var(--fg); box-shadow: 0 24px 60px rgba(0,0,0,.35);
+  }
+  dialog[open] { animation: obre .35s cubic-bezier(.3, 1.5, .5, 1); }
+  @keyframes obre { from { transform: scale(.85) translateY(20px); opacity: 0; } }
+  dialog::backdrop { background: rgba(20, 15, 30, .45); backdrop-filter: blur(4px); }
+  dialog h2 { margin: 0 0 6px; font: 700 1.6rem var(--font-display); text-align: center; text-wrap: balance; }
+  dialog h3 { margin: 18px 0 4px; font: 600 1.05rem var(--font-display); }
+  dialog p { line-height: 1.45; margin: 8px 0; }
+  .gran-emoji { font-size: 3rem; text-align: center; line-height: 1; margin-bottom: 6px; }
+  .subtitol { text-align: center; color: var(--muted); margin: 0 0 12px; font-weight: 700; }
+  .estrelles-fi { display: flex; justify-content: center; gap: 6px; font-size: 2.4rem; margin: 4px 0 10px; }
+  .estrelles-fi span { animation: estrella .5s cubic-bezier(.3, 1.8, .5, 1) backwards; }
+  .estrelles-fi .buida { filter: grayscale(1); opacity: .25; }
+  @keyframes estrella { from { transform: scale(0) rotate(-90deg); } }
+  .paraula-fi { display: flex; justify-content: center; gap: 5px; margin: 6px 0 12px; flex-wrap: wrap; }
+  .paraula-fi .cel { --t: 38px; border-radius: 10px; }
+  .missatge-extra { background: color-mix(in srgb, var(--groc) 20%, transparent); border-radius: 14px; padding: 10px 14px; font-weight: 700; text-align: center; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0 14px; }
+  .stats div { background: var(--bg); border-radius: 14px; padding: 10px 4px; text-align: center; }
+  .stats b { display: block; font: 700 1.5rem var(--font-display); font-variant-numeric: tabular-nums; }
+  .stats small { color: var(--muted); font-size: .72rem; font-weight: 700; }
+  .dist div { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-weight: 800; font-size: .85rem; }
+  .dist span { background: var(--gris); color: var(--on-color); padding: 2px 8px; text-align: right; min-width: 26px; border-radius: 6px; }
+  .accions { display: flex; gap: 10px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+  .mostra { display: flex; gap: 5px; margin: 12px 0 4px; }
+  .mostra .cel { --t: 36px; border-radius: 9px; }
+  .llista-amics { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 8px; }
+  .llista-amics li { display: flex; align-items: center; gap: 12px; background: var(--bg); border-radius: 14px; padding: 8px 12px; }
+  .llista-amics img { width: 36px; height: 36px; border-radius: 50%; }
+  .llista-amics .nom { flex: 1; min-width: 0; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .llista-amics .niv { font: 600 1rem var(--font-display); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .llista-amics li.jo { outline: 2px solid var(--accent); }
+  .form-nom input {
+    width: 100%; padding: 14px 16px; border-radius: 14px; border: 2px solid var(--tile-border);
+    background: var(--bg); color: var(--fg); font: 700 1.1rem var(--font-text); text-align: center;
+  }
+  .form-nom input:focus { outline: none; border-color: var(--accent); }
+  .ocult { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .compte { font: 700 2.2rem var(--font-display); text-align: center; font-variant-numeric: tabular-nums; margin: 6px 0; }
+
+  canvas#confeti { position: fixed; inset: 0; pointer-events: none; z-index: 30; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= MAPA ================= -->
+<section class="pantalla" id="pMapa">
+  <header class="capcalera">
+    <button class="icona" id="btnAjuda" aria-label="Com es juga">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M9.3 9.2a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.5-2.7 4"/><circle cx="12" cy="17.6" r=".6" fill="currentColor"/></svg>
+    </button>
+    <div class="logo" aria-label="Paraulina">
+      <span style="animation-delay:0s">P</span><span style="animation-delay:.05s">A</span><span style="animation-delay:.1s">R</span><span style="animation-delay:.15s">A</span><span style="animation-delay:.2s">U</span><span style="animation-delay:.25s">L</span><span style="animation-delay:.3s">I</span><span style="animation-delay:.35s">N</span><span style="animation-delay:.4s">A</span>
+    </div>
+    <button class="icona" id="btnStats" aria-label="Estadístiques">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 20v-6M12 20V5M19 20v-10"/></svg>
+    </button>
+  </header>
+  <div class="xips">
+    <div class="xip" title="Dies seguits jugant">🔥 <span id="ratxaDies">0</span></div>
+    <div class="xip" id="xipPartides" title="Partides que pots jugar avui">🎟️ <span id="partidesAvui">1</span></div>
+    <div class="xip" title="Estrelles guanyades">⭐ <span id="totalEstrelles">0</span></div>
+    <button class="xip" id="btnAmics" hidden>👥 Amics</button>
+  </div>
+  <div class="scroll-mapa" id="scrollMapa"><div class="cami" id="cami"></div></div>
+</section>
+
+<!-- ================= PARAULINA ================= -->
+<section class="pantalla" id="pParaulina" hidden>
+  <header class="capcalera">
+    <button class="icona tornar" aria-label="Torna al mapa">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="titol-joc"><b id="parTitol">Nivell 1</b><small id="parSub">Paraulina · Fàcil</small></div>
+    <span class="espai-icona"></span>
+  </header>
+  <div class="zona-joc"><div class="graella" id="graella"></div></div>
+  <div class="teclat" id="teclatParaulina"></div>
+</section>
+
+<!-- ================= PENJAT ================= -->
+<section class="pantalla" id="pPenjat" hidden>
+  <header class="capcalera">
+    <button class="icona tornar" aria-label="Torna al mapa">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="titol-joc"><b id="penTitol">Nivell 10</b><small>Nivell especial · Penjat</small></div>
+    <span class="espai-icona"></span>
+  </header>
+  <div class="zona-joc penjat-zona">
+    <svg class="forca" viewBox="0 0 200 200" stroke-width="7" stroke-linecap="round" aria-hidden="true">
+      <path class="estructura" fill="none" d="M20 190h110M50 190V18h90v22"/>
+      <circle class="part" cx="140" cy="58" r="18"/>
+      <path class="part" d="M140 76v52"/>
+      <path class="part" d="M140 90l-24 22"/>
+      <path class="part" d="M140 90l24 22"/>
+      <path class="part" d="M140 128l-20 32"/>
+      <path class="part" d="M140 128l20 32"/>
+    </svg>
+    <div class="vides" id="penVides" aria-label="Vides"></div>
+    <div class="forats" id="penForats"></div>
+  </div>
+  <div class="teclat" id="teclatPenjat"></div>
+</section>
+
+<!-- ================= ANAGRAMA ================= -->
+<section class="pantalla" id="pAnagrama" hidden>
+  <header class="capcalera">
+    <button class="icona tornar" aria-label="Torna al mapa">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <div class="titol-joc"><b id="anaTitol">Nivell 20</b><small>Nivell especial · Anagrama</small></div>
+    <span class="espai-icona"></span>
+  </header>
+  <div class="zona-joc anagrama-zona">
+    <p class="pista">Ordena les lletres per formar una paraula</p>
+    <div class="vides" id="anaVides" aria-label="Vides"></div>
+    <div class="ranures" id="anaRanures"></div>
+    <div class="fitxes" id="anaFitxes"></div>
+    <div class="botons-anagrama">
+      <button class="boto" id="anaBarreja">🔀 Barreja</button>
+      <button class="boto" id="anaEsborra">⌫ Esborra</button>
+      <button class="boto principal" id="anaComprova" disabled>Comprova</button>
+    </div>
+  </div>
+</section>
+
+<div class="avis" id="avis" role="status"></div>
+<canvas id="confeti"></canvas>
+
+<!-- ================= DIÀLEGS ================= -->
+<dialog id="dlgFi">
+  <div class="gran-emoji" id="fiEmoji"></div>
+  <h2 id="fiTitol"></h2>
+  <div class="estrelles-fi" id="fiEstrelles"></div>
+  <p class="subtitol" id="fiSub"></p>
+  <div class="paraula-fi" id="fiParaula"></div>
+  <p class="missatge-extra" id="fiExtra" hidden></p>
+  <div class="accions"><button class="boto principal" id="btnContinua">Continua</button></div>
+</dialog>
+
+<dialog id="dlgDema">
+  <div class="gran-emoji">🌙</div>
+  <h2>Prou per avui!</h2>
+  <p class="subtitol">La pròxima partida es desbloqueja d'aquí a</p>
+  <div class="compte" id="compteEnrere">--:--:--</div>
+  <p>Truc: si encertes la Paraulina en <b>3 intents o menys</b>, o superes un nivell especial, guanyes una partida extra al moment.</p>
+  <div class="accions"><button class="boto principal" data-tanca>D'acord</button></div>
+</dialog>
+
+<dialog id="dlgStats">
+  <h2>Estadístiques</h2>
+  <div id="statsCos"></div>
+  <div class="accions"><button class="boto" data-tanca>Tancar</button></div>
+  <div class="accions" style="margin-top:6px"><button class="enllac" id="btnReinicia">Reinicia el progrés</button></div>
+</dialog>
+
+<dialog id="dlgReinicia">
+  <h2>Començar de zero?</h2>
+  <p>Perdràs els nivells superats, les estrelles i la ratxa. No es pot desfer.</p>
+  <div class="accions">
+    <button class="boto" data-tanca>Cancel·la</button>
+    <button class="boto perill" id="btnReiniciaSi">Sí, reinicia</button>
+  </div>
+</dialog>
+
+<dialog id="dlgAmics">
+  <h2>Amics</h2>
+  <p class="subtitol">Per on va cadascú al mapa</p>
+  <ul class="llista-amics" id="llistaAmics"></ul>
+  <p id="amicsBuit" hidden>Encara no hi ha ningú més. Comparteix aquest joc amb els teus amics i apareixeran aquí i al mapa.</p>
+  <div class="accions"><button class="boto" data-tanca>Tancar</button></div>
+  <div class="accions" style="margin-top:6px"><button class="enllac" id="btnCanviaNom" hidden>Canvia el meu nom</button></div>
+</dialog>
+
+<dialog id="dlgNom">
+  <div class="gran-emoji">👋</div>
+  <h2>Com et dius?</h2>
+  <p class="subtitol">Així et veuran els altres jugadors al mapa</p>
+  <form id="formNom" class="form-nom">
+    <label for="inputNom" class="ocult">El teu nom</label>
+    <input id="inputNom" maxlength="20" autocomplete="nickname" placeholder="El teu nom" required>
+    <div class="accions"><button class="boto principal" type="submit">Som-hi!</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgAjuda">
+  <div class="gran-emoji">🧩</div>
+  <h2>Com es juga</h2>
+  <p>Avança pel <b>mapa</b> superant nivells. Cada nivell és una <b>Paraulina</b>: endevina la paraula de 5 lletres en 6 intents.</p>
+  <div class="mostra"><div class="cel verd">G</div><div class="cel">A</div><div class="cel">T</div><div class="cel">E</div><div class="cel">T</div></div>
+  <p><b>Verd</b>: la lletra hi és i al lloc correcte.</p>
+  <div class="mostra"><div class="cel">P</div><div class="cel groc">O</div><div class="cel">B</div><div class="cel">L</div><div class="cel">E</div></div>
+  <p><b>Groc</b>: la lletra hi és, però en un altre lloc. <b>Gris</b>: no hi és.</p>
+  <p>Els nivells <b>10, 20, 30…</b> són especials: un <b>Penjat</b> o un <b>Anagrama</b>.</p>
+  <p>Tens <b>una partida al dia</b>. Si encertes la Paraulina en <b>3 intents o menys</b>, o superes un nivell especial, en guanyes una altra.</p>
+  <p>Amb el botó <b>👥 Amics</b> veus per on va cadascú, i al mapa surten els altres jugadors al nivell on són.</p>
+  <p>Toca qualsevol casella per escriure-hi. Els accents no compten (<i>nuvol</i> = <i>núvol</i>), però la <b>Ç</b> és una lletra pròpia.</p>
+  <div class="accions"><button class="boto principal" data-tanca>Som-hi!</button></div>
+</dialog>
+
+<script src="paraules.js"></script>
+<script src="firebase-config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+rules_version = '2';
+
+// Regles de la base de dades de Paraulina.
+// Tothom pot veure el progrés de tothom, però cada jugador només pot escriure el seu document
+// (jugadors/<el seu id>) i amb els camps i mides esperats.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /jugadors/{uid} {
+      allow read: if true;
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['nom', 'nivell', 'estrelles', 'total', 'actualitzat'])
+        && request.resource.data.nom is string
+        && request.resource.data.nom.size() > 0
+        && request.resource.data.nom.size() <= 20
+        && request.resource.data.nivell is int
+        && request.resource.data.nivell >= 1
+        && request.resource.data.nivell <= 100000
+        && request.resource.data.total is int
+        && request.resource.data.estrelles is map
+        && request.resource.data.actualitzat is int;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
