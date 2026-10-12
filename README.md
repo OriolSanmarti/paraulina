@@ -2,7 +2,7 @@
 
 Joc de paraules en català, a l'estil del Wordle. Endevina la paraula de 5 lletres en 6 intents: les lletres es tornen verdes si són al lloc correcte i grogues si hi són però en un altre lloc.
 
-**Juga-hi:** https://oriolsanmarti.github.io/paraulina/
+**Juga-hi:** https://paraulina.web.app/
 
 ## Com funciona
 
@@ -21,20 +21,32 @@ Joc de paraules en català, a l'estil del Wordle. Endevina la paraula de 5 lletr
 | `paraules.js` | Paraules solució per nivell, paraules dels nivells especials i diccionari de paraules vàlides |
 | `firebase-config.js` | Configuració de Firebase (a `null`, el joc funciona sense amics) |
 | `firestore.rules` | Regles de seguretat de la base de dades |
+| `firebase.json`, `.firebaserc` | Configuració per publicar a Firebase Hosting |
 
 Per editar quines paraules surten a cada nivell, canvieu les llistes de `SOLUCIONS` i `ESPECIALS` a l'inici de `paraules.js`.
 
 ## Provar-lo en local
 
-Obriu `index.html` al navegador. Afegint `?prova` a l'adreça (`index.html?prova`) no hi ha límit de partides diàries.
+Obriu `index.html` al navegador. Afegint `?prova` a l'adreça (`index.html?prova`) no hi ha límit de partides diàries. Els amics només funcionen servint la carpeta des de `http://localhost` (per exemple amb `python -m http.server`), perquè la clau de Firebase està restringida a unes adreces concretes.
+
+## Publicar
+
+El joc s'allotja a Firebase Hosting (lloc `paraulina` del projecte `paraulina-def1c`). Per publicar els canvis, amb la [Firebase CLI](https://firebase.google.com/docs/cli) i la sessió iniciada (`firebase login`):
+
+```
+firebase deploy --only hosting,firestore:rules
+```
+
+L'antiga adreça de GitHub Pages (`oriolsanmarti.github.io/paraulina`) es publica des de la branca `redireccio` i porta a `paraulina.web.app`.
 
 ## Configurar la base de dades (Firebase)
 
 1. A https://console.firebase.google.com creeu un projecte (el pla gratuït Spark n'hi ha prou).
-2. **Authentication** → *Sign-in method* → activeu **Anònim**.
-3. **Firestore Database** → creeu la base de dades i, a la pestanya *Regles*, enganxeu el contingut de `firestore.rules` i publiqueu.
+2. **Authentication** → *Sign-in method* → activeu **Anònim** i **Google**.
+3. **Firestore Database** → creeu la base de dades. Les regles es publiquen amb `firebase deploy --only firestore:rules`.
 4. **Configuració del projecte** → *Les teves apps* → afegiu una app **web** i copieu l'objecte `firebaseConfig` a `firebase-config.js`.
-5. A **Authentication** → *Settings* → *Authorized domains*, comproveu que hi ha `oriolsanmarti.github.io`.
+5. A **Authentication** → *Settings* → *Authorized domains*, afegiu `paraulina.web.app`.
+6. A la consola de Google Cloud, restringiu la clau de l'API a les adreces del joc.
 
 ## Crèdits
 
